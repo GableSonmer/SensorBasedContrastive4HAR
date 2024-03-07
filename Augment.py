@@ -1,10 +1,16 @@
+import os
+
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+import scipy
 import tensorflow as tf
 import numpy as np
 import random
 from scipy.interpolate import interp1d
-#Part of the code reference https://github.com/iantangc/ContrastiveLearningHAR
 
-def resampling_fast(x,M,N):
+
+# Part of the code reference https://github.com/iantangc/ContrastiveLearningHAR
+
+def resampling_fast(x, M, N):
     time_steps = x.shape[1]
     raw_set = np.arange(time_steps)
     interp_steps = np.arange(0, raw_set[-1] + 1e-1, 1 / (M + 1))
@@ -15,6 +21,7 @@ def resampling_fast(x,M,N):
     start = random.randint(0, length_inserted - time_steps * (N + 1))
     index_selected = np.arange(start, start + time_steps * (N + 1), N + 1)
     return x_up[:, index_selected, :]
+
 
 def resampling_fast_random(x):
     M, N = random.choice([[1, 0], [2, 1], [3, 2]])
@@ -29,29 +36,31 @@ def resampling_fast_random(x):
     index_selected = np.arange(start, start + time_steps * (N + 1), N + 1)
     return x_up[:, index_selected, :]
 
-def resampling(x,M,N):
+
+def resampling(x, M, N):
     '''
     :param x: the data of a batch,shape=(batch_size,timesteps,features)
     :param M: the number of  new value under tow values
     :param N: the interval of resampling
     :return: x after resampling，shape=(batch_size,timesteps,features)
     '''
-    assert M>N,'the value of M have to greater than N'
+    assert M > N, 'the value of M have to greater than N'
 
     timesetps = x.shape[1]
 
-    for i in range(timesetps-1):
-        x1 = x[:,i*(M+1),:]
-        x2 = x[:,i*(M+1)+1,:]
+    for i in range(timesetps - 1):
+        x1 = x[:, i * (M + 1), :]
+        x2 = x[:, i * (M + 1) + 1, :]
         for j in range(M):
-            v = np.add(x1,np.subtract(x2,x1)*(j+1)/(M+1))
-            x = np.insert(x,i*(M+1)+j+1,v,axis=1)
+            v = np.add(x1, np.subtract(x2, x1) * (j + 1) / (M + 1))
+            x = np.insert(x, i * (M + 1) + j + 1, v, axis=1)
 
     length_inserted = x.shape[1]
-    start = random.randint(0,length_inserted-timesetps*(N+1))
-    index_selected = np.arange(start,start+timesetps*(N+1),N+1)
-    return x[:,index_selected,:]
+    start = random.randint(0, length_inserted - timesetps * (N + 1))
+    index_selected = np.arange(start, start + timesetps * (N + 1), N + 1)
+    return x[:, index_selected, :]
     return x
+
 
 def resampling_random(x):
     import random
@@ -71,19 +80,21 @@ def resampling_random(x):
     num = x.shape[0]
     start = random.randint(0, length_inserted - timesetps * (N + 1))
     index_selected = np.arange(start, start + timesetps * (N + 1), N + 1)
-    x_selected=x[0,index_selected,:][np.newaxis,]
-    for k in range(1,num):
+    x_selected = x[0, index_selected, :][np.newaxis,]
+    for k in range(1, num):
         start = random.randint(0, length_inserted - timesetps * (N + 1))
         index_selected = np.arange(start, start + timesetps * (N + 1), N + 1)
-        x_selected = np.concatenate((x_selected,x[k,index_selected,:][np.newaxis,]),axis=0)
+        x_selected = np.concatenate((x_selected, x[k, index_selected, :][np.newaxis,]), axis=0)
     return x_selected
 
 
 def noise(x):
-    x = tf.add(x,tf.multiply(x,tf.cast(tf.random.uniform(shape = (x.shape[0],x.shape[1],x.shape[2]),minval=-0.1,maxval=0.1),tf.float64)))
+    x = tf.add(x, tf.multiply(x, tf.cast(
+        tf.random.uniform(shape=(x.shape[0], x.shape[1], x.shape[2]), minval=-0.1, maxval=0.1), tf.float64)))
     return x
 
-def rotate(x,angles=np.pi/12):
+
+def rotate(x, angles=np.pi / 12):
     t = angles
     f = angles
     r = angles
@@ -96,37 +107,44 @@ def rotate(x,angles=np.pi/12):
     Rz = np.array([[np.cos(r), -np.sin(r), 0],
                    [np.sin(r), np.cos(r), 0],
                    [0, 0, 1]])
-    c = x.shape[2]//3
-    x_new = np.matmul(np.matmul(np.matmul(Rx,Ry),Rz),np.transpose(x[:,:,0:3],(0,2,1))).transpose(0,2,1)
-    for i in range(1,c):
-        temp = np.matmul(np.matmul(np.matmul(Rx,Ry),Rz),np.transpose(x[:,:,i*3:i*3+3],(0,2,1))).transpose(0,2,1)
-        x_new = np.concatenate((x_new,temp),axis=-1)
+    c = x.shape[2] // 3
+    x_new = np.matmul(np.matmul(np.matmul(Rx, Ry), Rz), np.transpose(x[:, :, 0:3], (0, 2, 1))).transpose(0, 2, 1)
+    for i in range(1, c):
+        temp = np.matmul(np.matmul(np.matmul(Rx, Ry), Rz), np.transpose(x[:, :, i * 3:i * 3 + 3], (0, 2, 1))).transpose(
+            0, 2, 1)
+        x_new = np.concatenate((x_new, temp), axis=-1)
     return x_new
 
 
 def scaling(x):
-    alpha = np.random.randint(7,10)/10
+    alpha = np.random.randint(7, 10) / 10
     # alpha = 0.9
-    return tf.multiply(x,alpha)
+    return tf.multiply(x, alpha)
+
+
 #
 def magnify(x):
-    lam = np.random.randint(11,14)/10
-    return tf.multiply(x,lam)
+    lam = np.random.randint(11, 14) / 10
+    return tf.multiply(x, lam)
 
 
 def inverting(x):
-    return np.multiply(x,-1)
+    return np.multiply(x, -1)
+
+
 def reversing(x):
-    return x[:,-1::-1,:]
+    return x[:, -1::-1, :]
 
 
 def rotation(x):
-    c = x.shape[2]//3
-    x_new = rotation_transform_vectorized(x[:,:,0:3])
-    for i in range(1,c):
-        temp = rotation_transform_vectorized(x[:,:,i*3:(i+1)*3])
-        x_new = np.concatenate((x_new,temp),axis=-1)
+    c = x.shape[2] // 3
+    x_new = rotation_transform_vectorized(x[:, :, 0:3])
+    for i in range(1, c):
+        temp = rotation_transform_vectorized(x[:, :, i * 3:(i + 1) * 3])
+        x_new = np.concatenate((x_new, temp), axis=-1)
     return x_new
+
+
 def rotation_transform_vectorized(X):
     """
     Applying a random 3D rotation
@@ -137,6 +155,7 @@ def rotation_transform_vectorized(X):
 
     return np.matmul(X, matrices)
 
+
 def axis_angle_to_rotation_matrix_3d_vectorized(axes, angles):
     """
     Get the rotational matrix corresponding to a rotation of (angle) radian around the axes
@@ -145,19 +164,59 @@ def axis_angle_to_rotation_matrix_3d_vectorized(axes, angles):
     Formula: http://en.wikipedia.org/wiki/Rotation_matrix#Axis_and_angle
     """
     axes = axes / np.linalg.norm(axes, ord=2, axis=1, keepdims=True)
-    x = axes[:, 0]; y = axes[:, 1]; z = axes[:, 2]
+    x = axes[:, 0];
+    y = axes[:, 1];
+    z = axes[:, 2]
     c = np.cos(angles)
     s = np.sin(angles)
     C = 1 - c
 
-    xs = x*s;   ys = y*s;   zs = z*s
-    xC = x*C;   yC = y*C;   zC = z*C
-    xyC = x*yC; yzC = y*zC; zxC = z*xC
+    xs = x * s;
+    ys = y * s;
+    zs = z * s
+    xC = x * C;
+    yC = y * C;
+    zC = z * C
+    xyC = x * yC;
+    yzC = y * zC;
+    zxC = z * xC
 
     m = np.array([
-        [ x*xC+c,   xyC-zs,   zxC+ys ],
-        [ xyC+zs,   y*yC+c,   yzC-xs ],
-        [ zxC-ys,   yzC+xs,   z*zC+c ]])
-    matrix_transposed = np.transpose(m, axes=(2,0,1))
+        [x * xC + c, xyC - zs, zxC + ys],
+        [xyC + zs, y * yC + c, yzC - xs],
+        [zxC - ys, yzC + xs, z * zC + c]])
+    matrix_transposed = np.transpose(m, axes=(2, 0, 1))
     return matrix_transposed
 
+
+def time_warp(X, sigma=0.2, num_knots=4, num_splines=150):
+    """
+    Stretching and warping the time-series (low cost)
+    """
+
+    def get_cubic_spline_interpolation(x_eval, x_data, y_data):
+        """
+        Get values for the cubic spline interpolation
+        """
+        cubic_spline = scipy.interpolate.CubicSpline(x_data, y_data)
+        return cubic_spline(x_eval)
+
+    time_stamps = np.arange(X.shape[1])
+    knot_xs = np.arange(0, num_knots + 2, dtype=float) * (X.shape[1] - 1) / (num_knots + 1)
+    spline_ys = np.random.normal(loc=1.0, scale=sigma, size=(num_splines, num_knots + 2))
+
+    spline_values = np.array(
+        [get_cubic_spline_interpolation(time_stamps, knot_xs, spline_ys_individual) for spline_ys_individual in
+         spline_ys])
+
+    cumulative_sum = np.cumsum(spline_values, axis=1)
+    distorted_time_stamps_all = cumulative_sum / cumulative_sum[:, -1][:, np.newaxis] * (X.shape[1] - 1)
+
+    random_indices = np.random.randint(num_splines, size=(X.shape[0] * X.shape[2]))
+
+    X_transformed = np.empty(shape=X.shape)
+    for i, random_index in enumerate(random_indices):
+        X_transformed[i // X.shape[2], :, i % X.shape[2]] = np.interp(time_stamps,
+                                                                      distorted_time_stamps_all[random_index],
+                                                                      X[i // X.shape[2], :, i % X.shape[2]])
+    return X_transformed
